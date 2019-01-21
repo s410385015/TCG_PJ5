@@ -252,8 +252,8 @@ public:
 		{
 			board::cell max_tile=b.GetMaxTile();
 			bonusFlag=false;
-			retun 4;
-			//return 4+rand()%(max_tile-7+1);
+			//return 4;
+			return 4+rand()%(max_tile-7+1);
 		}
 
 		board::cell max_tile=b.GetMaxTile();
