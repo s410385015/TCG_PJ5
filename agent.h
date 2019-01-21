@@ -9,6 +9,9 @@
 #include "action.h"
 #include "weight.h"
 #include <fstream>
+#include <limits.h>
+#include "TD.h"
+#include <deque>
 
 class agent {
 public:
@@ -25,7 +28,7 @@ public:
 	virtual void close_episode(const std::string& flag = "") {}
 	virtual action take_action(const board& b) { return action(); }
 	virtual bool check_for_win(const board& b) { return false; }
-
+	virtual void InitEpisode(){}
 public:
 	virtual std::string property(const std::string& key) const { return meta.at(key); }
 	virtual void notify(const std::string& msg) { meta[msg.substr(0, msg.find('='))] = { msg.substr(msg.find('=') + 1) }; }
@@ -58,6 +61,7 @@ protected:
 /**
  * base agent for agents with weight tables
  */
+ /*
 class weight_agent : public agent {
 public:
 	weight_agent(const std::string& args = "") : agent(args) {
@@ -98,7 +102,7 @@ protected:
 protected:
 	std::vector<weight> net;
 };
-
+*/
 /**
  * base agent for agents with a learning rate
  */
@@ -123,21 +127,190 @@ protected:
 class rndenv : public random_agent {
 public:
 	rndenv(const std::string& args = "") : random_agent("name=random role=environment " + args),
-		space({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }), popup(0, 9) {}
+		opcode({  0,1, 2, 3 }),
+		space({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }), 
+		space_each_op({12,13,14,15,0,4,8,12,0,1,2,3,3,7,11,15})
+		{
+			td.add(new weight(1<<6*sizeof(float),{0, 1, 2, 3, 4, 5}));
+			td.add(new weight(1<<6*sizeof(float),{4, 5, 6, 7, 8, 9}));
+			td.add(new weight(1<<6*sizeof(float),{0, 1, 2, 4, 5, 6 }));
+			td.add(new weight(1<<6*sizeof(float),{4, 5, 6, 8, 9, 10 }));
+			TD_load();
+			
+		}
 
+	virtual void InitEpisode(){
+		ResetBags();
+	}
 	virtual action take_action(const board& after) {
+	
+		
+		total++;
 		std::shuffle(space.begin(), space.end(), engine);
-		for (int pos : space) {
-			if (after(pos) != 0) continue;
-			board::cell tile = popup(engine) ? 1 : 2;
-			return action::place(pos, tile);
+		if(bags.size() <3) FillIn();
+		
+	
+		board::cell tile=GenerateTile(after);
+		board::cell hintTile=bags.front();
+
+		if(bonusFlag)
+			hintTile=4;
+
+		int last_move=after.getLastMove();
+		//std::cout<<last_move<<std::endl;
+		
+		if(last_move==-1){
+			for (int pos : space) {
+				if (after(pos) != 0) continue;	
+						
+				return action::place(pos, tile,hintTile);
+			}
+		}else
+		{
+			//std::shuffle(space_each_op[last_move].begin(), space_each_op[last_move].end(), engine);
+			action act=action();
+			board:: reward _min=INT_MAX;
+			for(int pos : space_each_op[last_move])
+			{
+				//std::cout<<pos<<" ";
+				if (after(pos) != 0) continue;			
+				
+				board nextBoard(after);
+				nextBoard.place(pos,tile,hintTile);
+				
+				board::reward _max=INT_MIN;
+				for (int op : opcode) {
+					board _after(nextBoard);
+					board::reward reward = _after.slide(op);
+
+					if (reward == -1)
+						continue;
+					board:: reward new_reward=reward+td.estimate(_after,bags.front()-1)+Search(_after,hintTile,1);
+
+
+					if(new_reward>_max)
+						_max=new_reward;
+					
+				}
+
+				if(_max<_min){
+					_min=_max;
+					act=action::place(pos,tile,hintTile);
+				}
+			
+			}
+
+
+			return act;
+			//return action::place(pos, tile,bags.front());
 		}
 		return action();
 	}
 
+	board:: reward Search(board after,board::cell tile,int i)
+	{
+	
+		int last_move=after.getLastMove();
+		board::cell hintTile=bags[i];
+		board:: reward _min=INT_MAX;
+		for(int pos : space_each_op[last_move])
+		{
+			//std::cout<<pos<<" ";
+			if (after(pos) != 0) continue;			
+			
+			board nextBoard(after);
+			nextBoard.place(pos,tile,hintTile);
+			
+			board::reward _max=INT_MIN;
+			for (int op : opcode) {
+				board _after(nextBoard);
+				board::reward reward = _after.slide(op);
+
+				if (reward == -1)
+					continue;
+				board:: reward new_reward=reward+td.estimate(_after,hintTile-1);
+
+
+				if(new_reward>_max)
+					_max=new_reward;
+				
+			}
+
+			if(_max<_min){
+				_min=_max;
+		
+			}
+		}
+		return _min;
+	}
+	
+
+	board::cell GenerateTile(const board& b)
+	{
+
+		if(bonusFlag)
+		{
+			board::cell max_tile=b.GetMaxTile();
+			bonusFlag=false;
+			retun 4;
+			//return 4+rand()%(max_tile-7+1);
+		}
+
+		board::cell max_tile=b.GetMaxTile();
+		
+		board::cell tile=-1;
+		if(max_tile>=7){
+
+		
+			if((rand()%21==0)&&((bonus+1)/total)<(1.0/21.0))
+			{
+				bonusFlag=true;
+				bonus++;
+			}
+			
+			
+		}
+		
+		tile= bags.front();
+		bags.pop_front();
+			//std::cout<<"?"<<std::endl;
+		
+		//std::cout<<max_tile<<std::endl;
+		//std::cout<<tile<<std::endl;
+		return tile;
+	}
+
+
+
+	void FillIn()
+	{	
+		std::array<int,12> tmp{1,1,1,1,2,2,2,2,3,3,3,3};
+		std::shuffle(tmp.begin(),tmp.end(),engine);
+		for(int i=0;i<12;i++)
+			bags.push_back(tmp[i]);
+			
+	}
+	void ResetBags()
+	{
+		bags.clear();
+		FillIn();
+		total=bonus=0;
+		bonusFlag=false;
+	}
+	void TD_load()
+	{
+		td.Load();
+	}
 private:
+	std::array<int, 4> opcode;
 	std::array<int, 16> space;
-	std::uniform_int_distribution<int> popup;
+	std::array<std::array<int,4>,4> space_each_op;
+	std::deque<int> bags;
+	float total;
+	float bonus;
+	TD td;
+	bool bonusFlag=false;
+	
 };
 
 /**
@@ -147,17 +320,60 @@ private:
 class player : public random_agent {
 public:
 	player(const std::string& args = "") : random_agent("name=dummy role=player " + args),
-		opcode({ 0, 1, 2, 3 }) {}
+		opcode({  0,1, 2, 3 }),
+		space_each_op({12,13,14,15,0,4,8,12,0,1,2,3,3,7,11,15}) {
+			path.reserve(20000);
+			td.add(new weight(1<<6*sizeof(float),{0, 1, 2, 3, 4, 5}));
+			td.add(new weight(1<<6*sizeof(float),{4, 5, 6, 7, 8, 9}));
+			td.add(new weight(1<<6*sizeof(float),{0, 1, 2, 4, 5, 6 }));
+			td.add(new weight(1<<6*sizeof(float),{4, 5, 6, 8, 9, 10 }));
+			TD_load();
+		}
 
 	virtual action take_action(const board& before) {
-		std::shuffle(opcode.begin(), opcode.end(), engine);
-		for (int op : opcode) {
-			board::reward reward = board(before).slide(op);
-			if (reward != -1) return action::slide(op);
-		}
-		return action();
+
+		return SelectMove(before);
 	}
 
+	action SelectMove(const board& before)
+	{
+		
+		board:: reward _max=INT_MIN;
+		action act=action();
+		
+	
+		for (int op : opcode) {
+			board after(before);
+			board::reward reward = after.slide(op);
+			//std::cout<<op<<" "<<reward<<std::endl;
+			if (reward == -1)
+				continue;
+
+			board:: reward new_reward=reward;
+			
+			if(before.getNextTile()<=3)
+				new_reward+=td.estimate(after,before.getNextTile()-1);
+			
+			if(new_reward>_max)
+			{
+				_max=new_reward;
+				act=action::slide(op);
+			}
+		}
+
+	
+		return act;
+	}
+
+
+	
+	void TD_load()
+	{
+		td.Load();
+	}
 private:
 	std::array<int, 4> opcode;
+	std::array<std::array<int,4>,4> space_each_op;
+	std::vector<state> path;
+	TD td;
 };

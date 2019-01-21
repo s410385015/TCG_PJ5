@@ -30,6 +30,7 @@ public:
 	}
 	bool apply_action(action move) {
 		board::reward reward = move.apply(state());
+		
 		if (reward == -1) return false;
 		ep_moves.emplace_back(move, reward, millisec() - ep_time);
 		ep_score += reward;
@@ -37,7 +38,7 @@ public:
 	}
 	agent& take_turns(agent& play, agent& evil) {
 		ep_time = millisec();
-		return (std::max(step() + 1, size_t(2)) % 2) ? play : evil;
+		return (std::max(step()+2, size_t(10)) % 2) ? play : evil;
 	}
 	agent& last_turns(agent& play, agent& evil) {
 		return take_turns(evil, play);

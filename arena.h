@@ -20,6 +20,7 @@ public:
 		void open_episode(const std::string& tag) {
 			play->open_episode(tag);
 			evil->open_episode(tag);
+			evil->InitEpisode();
 			episode::open_episode(tag);
 		}
 		void close_episode(const std::string& tag) {
@@ -48,7 +49,7 @@ public:
 		auto play = find_agent(tag.substr(0, tag.find(':')), "play");
 		auto evil = find_agent(tag.substr(tag.find(':') + 1), "evil");
 		if (play->role() == "dummy" && evil->role() == "dummy") return false;
-
+	
 		std::shared_ptr<match> m(new match(id, play, evil));
 		m->open_episode(tag);
 		ongoing[id] = m;

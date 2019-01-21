@@ -22,7 +22,7 @@ public:
 	typedef int reward;
 
 public:
-	board() : tile(), attr(0) {}
+	board() : tile(), attr(0),last_move(-1) {}
 	board(const grid& b, data v = 0) : tile(b), attr(v) {}
 	board(const board& b) = default;
 	board& operator =(const board& b) = default;
@@ -36,6 +36,7 @@ public:
 
 	data info() const { return attr; }
 	data info(data dat) { data old = attr; attr = dat; return old; }
+
 
 public:
 	bool operator ==(const board& b) const { return tile == b.tile; }
@@ -51,10 +52,12 @@ public:
 	 * place a tile (index value) to the specific position (1-d form index)
 	 * return 0 if the action is valid, or -1 if not
 	 */
-	reward place(unsigned pos, cell tile) {
+	reward place(unsigned pos, cell tile,cell next) {
+		//std::cout<<"!!:"<<pos<<" "<<tile<<" "<<next<<std::endl;
 		if (pos >= 16) return -1;
-		if (tile != 1 && tile != 2) return -1;
+		//if (tile != 1 && tile != 2 && tile != 3) return -1;
 		operator()(pos) = tile;
+		nextTile=next;
 		return 0;
 	}
 
@@ -63,6 +66,9 @@ public:
 	 * return the reward of the action, or -1 if the action is illegal
 	 */
 	reward slide(unsigned opcode) {
+		last_move=opcode&0b11;
+
+		//std::cout<<last_move<<std::endl;
 		switch (opcode & 0b11) {
 		case 0: return slide_up();
 		case 1: return slide_right();
@@ -77,25 +83,34 @@ public:
 		reward score = 0;
 		for (int r = 0; r < 4; r++) {
 			auto& row = tile[r];
-			int top = 0, hold = 0;
-			for (int c = 0; c < 4; c++) {
-				int tile = row[c];
-				if (tile == 0) continue;
-				row[c] = 0;
-				if (hold) {
-					if (tile == hold) {
-						row[top++] = ++tile;
-						score += (1 << tile);
-						hold = 0;
-					} else {
-						row[top++] = hold;
-						hold = tile;
-					}
-				} else {
-					hold = tile;
+			for (int c = 0; c < 3; c++) {
+				int tile_1 = row[c];
+				int tile_2 = row[c+1];
+				if(!tile_1)
+				{	
+					row[c]=tile_2;
+					row[c+1]=0;
+					continue;
 				}
+
+				if( tile_1!=0 && tile_2!=0 && tile_1+tile_2==3 )
+				{
+					row[c]=3;
+					row[c+1]=0;
+					score+=3;
+					continue;
+				}
+
+				if(tile_1==tile_2&& tile_1>2 && tile_1<15)
+				{
+					row[c]=tile_1+1;
+					row[c+1]=0;
+					score+=(3<<(tile_1-2));
+					continue;
+				}
+				
 			}
-			if (hold) tile[r][top] = hold;
+			
 		}
 		return (*this != prev) ? score : -1;
 	}
@@ -152,17 +167,27 @@ public:
 		case 3: rotate_left(); break;
 		}
 	}
-
+	cell GetMaxTile()const
+	{
+		cell t=0;
+		for(int i=0;i<4;i++)
+			for(int j=0;j<4;j++)
+				if(tile[i][j]>t)
+					t=tile[i][j];
+		return t;
+	}
 	void rotate_right() { transpose(); reflect_horizontal(); } // clockwise
 	void rotate_left() { transpose(); reflect_vertical(); } // counterclockwise
 	void reverse() { reflect_horizontal(); reflect_vertical(); }
-
+	reward getLastMove()const {return last_move;}
+	reward getNextTile()const {return nextTile;}
 public:
 	friend std::ostream& operator <<(std::ostream& out, const board& b) {
+		const char* idx = "012";
 		out << "+------------------------+" << std::endl;
 		for (auto& row : b.tile) {
 			out << "|" << std::dec;
-			for (auto t : row) out << std::setw(6) << ((1 << t) & -2u);
+			for (auto t : row) out << std::setw(6) <<((t>2)? ((3<<(t-3))):(idx[t]-'0'));
 			out << "|" << std::endl;
 		}
 		out << "+------------------------+" << std::endl;
@@ -172,4 +197,6 @@ public:
 private:
 	grid tile;
 	data attr;
+	reward last_move;
+	reward nextTile;
 };

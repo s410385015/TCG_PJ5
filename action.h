@@ -12,11 +12,14 @@ public:
 
 	class slide; // create a sliding action with board opcode
 	class place; // create a placing action with position and tile
-
+	unsigned code;
+	
 public:
 	virtual board::reward apply(board& b) const {
 		auto proto = entries().find(type());
+		//std::cout<<"?"<<std::endl;
 		if (proto != entries().end()) return proto->second->reinterpret(this).apply(b);
+		//std::cout<<"!"<<std::endl;
 		return -1;
 	}
 	virtual std::ostream& operator >>(std::ostream& out) const {
@@ -37,6 +40,8 @@ public:
 	operator unsigned() const { return code; }
 	unsigned type() const { return code & type_flag(-1u); }
 	unsigned event() const { return code & ~type(); }
+	unsigned nextTile() const { return event() >> 8; }
+	void SetHintTile(unsigned next) const{}
 	friend std::ostream& operator <<(std::ostream& out, const action& a) { return a >> out; }
 	friend std::istream& operator >>(std::istream& in, action& a) { return a << in; }
 
@@ -47,7 +52,7 @@ protected:
 	static prototype& entries() { static prototype m; return m; }
 	virtual action& reinterpret(const action* a) const { return *new (const_cast<action*>(a)) action(*a); }
 
-	unsigned code;
+	
 };
 
 class action::slide : public action {
@@ -55,8 +60,10 @@ public:
 	static constexpr unsigned type = type_flag('s');
 	slide(unsigned oper) : action(slide::type | (oper & 0b11)) {}
 	slide(const action& a = {}) : action(a) {}
+
 public:
 	board::reward apply(board& b) const {
+
 		return b.slide(event());
 	}
 	std::ostream& operator >>(std::ostream& out) const {
@@ -84,13 +91,16 @@ protected:
 class action::place : public action {
 public:
 	static constexpr unsigned type = type_flag('p');
-	place(unsigned pos, unsigned tile) : action(place::type | (pos & 0x0f) | (std::min(tile, 35u) << 4)) {}
+	place(unsigned pos, unsigned tile,unsigned next) : action(place::type | (pos & 0x0f) | (std::min(tile, 35u) << 4)|(next<<8)) {}
 	place(const action& a = {}) : action(a) {}
 	unsigned position() const { return event() & 0x0f; }
-	unsigned tile() const { return event() >> 4; }
+	unsigned tile() const { return (event() >> 4)& 0x0f; }
+	unsigned nextTile() const { return event() >> 8; }
 public:
 	board::reward apply(board& b) const {
-		return b.place(position(), tile());
+		int r=b.place(position(), tile(),nextTile());
+
+		return r;
 	}
 	std::ostream& operator >>(std::ostream& out) const {
 		const char* idx = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ?";
@@ -104,7 +114,7 @@ public:
 			in.ignore(1) >> v;
 			unsigned tile = std::find(idx, idx + 36, v) - idx;
 			if (tile < 36) {
-				operator =(action::place(pos, tile));
+				operator =(action::place(pos, tile,1));
 				return in;
 			}
 		}

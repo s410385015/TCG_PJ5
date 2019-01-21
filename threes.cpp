@@ -21,8 +21,9 @@
 #include "io.h"
 
 int shell(int argc, const char* argv[]) {
-	arena host("anonymous");
 
+	arena host("anonymous");
+	
 	for (int i = 1; i < argc; i++) {
 		std::string para(argv[i]);
 		if (para.find("--name=") == 0 || para.find("--account=") == 0) {
@@ -55,11 +56,21 @@ int shell(int argc, const char* argv[]) {
 					// your agent need to take an action
 					action a = host.at(id).take_action();
 					host.at(id).apply_action(a);
-					output() << id << ' ' << a << std::endl;
+					if (a.type() == action::place::type) {
+						int hint = a.nextTile();
+						output() << id << ' ' << a << '+' << hint << std::endl;
+					} else {
+						output() << id << ' ' << a << std::endl;
+					}
 				} else {
 					// perform your opponent's action
 					action a;
 					std::stringstream(move) >> a;
+					int hint = 0;
+					if (a.type() == action::place::type) {
+						hint = move[3] - '0';
+						a.SetHintTile(hint);
+					}
 					host.at(id).apply_action(a);
 				}
 
@@ -126,7 +137,7 @@ int shell(int argc, const char* argv[]) {
 }
 
 int main(int argc, const char* argv[]) {
-	std::cout << "2048-Demo: ";
+	std::cout << "Threes-Demo: ";
 	std::copy(argv, argv + argc, std::ostream_iterator<const char*>(std::cout, " "));
 	std::cout << std::endl << std::endl;
 
