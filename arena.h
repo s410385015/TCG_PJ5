@@ -45,7 +45,7 @@ public:
 	}
 	bool open(const std::string& id, const std::string& tag) {
 		if (ongoing.find(id) != ongoing.end()) return false;
-
+		if (ongoing.size()) return false;
 		auto play = find_agent(tag.substr(0, tag.find(':')), "play");
 		auto evil = find_agent(tag.substr(tag.find(':') + 1), "evil");
 		if (play->role() == "dummy" && evil->role() == "dummy") return false;

@@ -22,6 +22,8 @@
 
 int shell(int argc, const char* argv[]) {
 
+
+
 	arena host("anonymous");
 	
 	for (int i = 1; i < argc; i++) {
@@ -82,12 +84,14 @@ int shell(int argc, const char* argv[]) {
 					// a new match is pending
 					if (host.open(id, tag)) {
 						output() << id << " open accept" << std::endl;
+						
 					} else {
 						output() << id << " open reject" << std::endl;
 					}
 				} else if (ctrl == "close") {
 					// a match is finished
 					host.close(id, tag);
+					
 				}
 
 			} else if (std::regex_match(command, arena_ctrl)) {
